@@ -6,7 +6,7 @@
 #include <fstream>
 #include <iostream>
 
-namespace mps {
+namespace sys {
 namespace json {
 namespace common {
 bool isWhitespace (int ch);
@@ -32,8 +32,8 @@ bool isKeyword (std::string text);
 bool isValue (std::string text);
 
 std::string i2str (int x);
-}           /// <--- common
-}       /// <--- json
-}   /// <--- mps
+}
+}
+}
 
 #endif

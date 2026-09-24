@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vector>
 
-namespace mps {
+namespace sys {
 namespace json {
 namespace out {
 /*
@@ -78,8 +78,8 @@ private:
     int idLevel;
     int idSize;
 };
-}           /// <--- out
-}       /// <--- json
-}   /// <--- mps
+}
+}
+}
 
 #endif

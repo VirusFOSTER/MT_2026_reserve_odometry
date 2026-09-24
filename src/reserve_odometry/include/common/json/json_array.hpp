@@ -3,7 +3,7 @@
 
 #include "json_loader.hpp"
 
-namespace mps {
+namespace sys {
 namespace json {
 namespace array {
 /*
@@ -66,8 +66,8 @@ private:
     void ensureIndex (int index) const;
     bool isIndexValid (int index) const;
 };
-}           /// <--- array
-}       /// <--- json
-}   /// <--- mps
+}
+}
+}
 
 #endif

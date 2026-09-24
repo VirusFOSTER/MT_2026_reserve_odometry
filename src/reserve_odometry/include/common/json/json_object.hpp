@@ -3,7 +3,7 @@
 
 #include "json_loader.hpp"
 
-namespace mps {
+namespace sys{
 namespace json {
 namespace object {
 /*
@@ -73,8 +73,8 @@ private:
     std::string tag () const;
     void addProperty (std::string key, std::string val);
 };
-}           /// <--- object
-}       /// <--- json
-}   /// <--- mps
+}
+}
+}
 
 #endif

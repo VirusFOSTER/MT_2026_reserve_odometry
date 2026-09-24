@@ -1,6 +1,6 @@
-#include "utils/json_io/json_common.hpp"
+#include "../../../../include/detection/common/json/json_common.hpp"
 
-namespace mps { namespace json { namespace common {
+namespace sys { namespace json { namespace common {
 bool isWhitespace (int ch) {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 }

@@ -6,7 +6,7 @@
 #include <vector>
 #include <iostream>
 
-namespace mps {
+namespace sys {
 namespace json {
 namespace object { class JsonObject; }
 namespace array { class JsonArray; }
@@ -91,8 +91,8 @@ private:
     object::JsonObject *objectByTag (std::string tag);
     array::JsonArray *arrayByTag (std::string tag);
 };
-}           /// <--- loader
-}       /// <--- json
-}   /// <--- mps
+}
+}
+}
 
 #endif
