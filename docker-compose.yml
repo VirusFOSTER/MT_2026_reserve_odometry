@@ -1,0 +1,29 @@
+services:
+  ros2:
+    build:
+      context: .
+      args:
+        USER_UID: ${UID:-1000}
+        USER_GID: ${GID:-1000}
+    image: ros2-humble-dev
+    container_name: ros2_dev
+    network_mode: host
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=0
+    volumes:
+      # Ваши исходники с хоста — редактируются в IDE на хосте
+      - ./src:/ros2_ws/src
+      # Кэш сборки внутри именованного тома: не мусорит на хосте,
+      # но сохраняется между перезапусками контейнера
+      - ros2_build:/ros2_ws_build
+      # X11 для GUI (RViz, rqt)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /ros2_ws
+    # Позволяет открыть шелл: docker compose exec ros2 bash
+    stdin_open: true
+    tty: true
+    command: bash
+
+volumes:
+  ros2_build:
