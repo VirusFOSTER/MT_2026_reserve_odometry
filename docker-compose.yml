@@ -19,6 +19,8 @@ services:
       - ros2_build:/ros2_ws_build
       # X11 для GUI (RViz, rqt)
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./results:/ros2_ws/results:rw
+      - ./logs:/ros2_ws/logs:rw
     working_dir: /ros2_ws
     # Позволяет открыть шелл: docker compose exec ros2 bash
     stdin_open: true
