@@ -11,6 +11,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 
 #include <memory>
+#include <string>
 
 class ReserveOdometry : public rclcpp::Node {
     public:
@@ -99,12 +100,100 @@ private:
         const tram_vehicle_msgs::msg::VelocitySensor::ConstSharedPtr& rear_bogie_vel,
         const tram_vehicle_msgs::msg::DriverControllerCommand::ConstSharedPtr& cmd
     ) {
-        RCLCPP_INFO(get_logger(),
-            "Получил входные данные!");
+        RCLCPP_INFO(
+            get_logger(),
+            "Входные данные получены!"
+        );
 
-        //Дальше обработка данных и определение местоположения трамвая...
+        const rclcpp::Time stamp(front_bogie_vel->header.stamp);
 
-        return;
+        const double velocity = 
+            0.5 * (
+                front_bogie_vel->velocity +
+                rear_bogie_vel->velocity
+            );
+        
+        if (!initialized_) {
+            last_stamp_ = stamp;
+            last_velocity_ = velocity;
+            initialized_ = true;
+
+            PublishVelocity(velocity, 
+                        "base_link",
+                        stamp);
+        
+            PublishPosition(velocity,
+                            "odom",
+                            "base_link",
+                            stamp);
+
+            return;
+        }
+
+        const double dt = (stamp - last_stamp_).seconds();
+
+        if (dt > 0.0 && dt < 1.0) {
+            const double distance = 0.5 * (last_velocity_ + velocity) * dt; 
+            x_ += distance;
+        }
+
+        last_stamp_ = stamp;
+        last_velocity_ = velocity;
+
+        PublishVelocity(velocity, 
+                        "base_link",
+                        stamp);
+        
+        PublishPosition(velocity,
+                        "odom",
+                        "base_link",
+                        stamp);
+        
+        RCLCPP_INFO(
+            get_logger(),
+            "v=%.3f m/s, x=%.3f m, dt=%.4f, cmd=%d",
+            velocity,
+            x_,
+            dt,
+            static_cast<int>(cmd->position)
+        );
+    }
+
+    void PublishVelocity(const double velocity,
+                         const std::string& frame_id,
+                         const rclcpp::Time& stamp) {
+        tram_vehicle_msgs::msg::VelocitySensor velocity_msg;
+
+        velocity_msg.header.stamp = stamp;
+        velocity_msg.header.frame_id = frame_id;
+        velocity_msg.velocity = velocity;
+        
+        vel_pub_->publish(velocity_msg);
+    }
+
+    void PublishPosition(const double velocity,
+                         const std::string& frame_id,
+                         const std::string& child_frame_id,
+                         const rclcpp::Time& stamp
+    ) {
+        nav_msgs::msg::Odometry odom_msg;
+
+        odom_msg.header.stamp = stamp;
+        odom_msg.header.frame_id = frame_id;
+        odom_msg.child_frame_id = child_frame_id;
+        
+        odom_msg.pose.pose.position.x = x_;
+        odom_msg.pose.pose.position.y = y_;
+        odom_msg.pose.pose.position.z = z_;
+
+        odom_msg.pose.pose.orientation.x = 0.0;
+        odom_msg.pose.pose.orientation.y = 0.0;
+        odom_msg.pose.pose.orientation.z = 0.0;
+        odom_msg.pose.pose.orientation.w = 0.0;
+
+        odom_msg.twist.twist.linear.x = velocity;
+        
+        pos_pub_->publish(odom_msg);
     }
 
     rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr master_fix_sub_;
@@ -122,6 +211,16 @@ private:
     std::shared_ptr<message_filters::Subscriber<tram_vehicle_msgs::msg::DriverControllerCommand>> cmd_sub_;
     int sync_queue_size_ = 30;
     double sync_slop_sec_ = 0.2;
+
+    double x_ = 0.0;
+    double y_ = 0.0;
+    double z_ = 0.0;
+
+    double last_velocity_ = 0.0;
+
+    rclcpp::Time last_stamp_{0,0,RCL_ROS_TIME};
+
+    bool initialized_ = false;
 
 };
 
