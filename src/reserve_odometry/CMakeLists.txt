@@ -37,26 +37,26 @@ target_link_libraries(reserve_odometry_node
   Eigen3::Eigen
 )
 
-#add_executable(metrics_evaluator_node
-#  src/metrics_evaluator_node.cpp
-#)
+add_executable(metrics_evaluator_node
+  src/metrics_evaluator_node.cpp
+)
 
-#ament_target_dependencies(metrics_evaluator_node
-#  rclcpp
-#  sensor_msgs
-#  geometry_msgs
-#  nav_msgs
-#  tram_vehicle_msgs
-#  message_filters
-#)
+ament_target_dependencies(metrics_evaluator_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  tram_vehicle_msgs
+  message_filters
+)
 
-#target_include_directories(metrics_evaluator_node PRIVATE
-#  ${GeographicLib_INCLUDE_DIRS}
-#)
+target_include_directories(metrics_evaluator_node PRIVATE
+  ${GeographicLib_INCLUDE_DIRS}
+)
 
-#target_link_libraries(metrics_evaluator_node
-#  ${GeographicLib_LIBRARIES}
-#)
+target_link_libraries(metrics_evaluator_node
+  ${GeographicLib_LIBRARIES}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -72,7 +72,7 @@ endif()
 
 install(TARGETS
   reserve_odometry_node
-  #metrics_evaluator_node
+  metrics_evaluator_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
