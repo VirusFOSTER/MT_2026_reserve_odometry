@@ -5,7 +5,6 @@
 #include "Eigen/LU"
 #include "Eigen/Dense"
 
-namespace sys {
 namespace filter {
 namespace kalman {
 namespace m_concept {
@@ -78,6 +77,5 @@ struct model_concept {
 }               /// <--- concept
 }           /// <--- kalman
 }       /// <--- filter
-}   /// <--- sys
 
 #endif

@@ -18,11 +18,15 @@ find_package(nav_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tram_vehicle_msgs REQUIRED)
+find_package(eigen3_cmake_module REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(Boost REQUIRED)
 
 add_executable(reserve_odometry_node src/reserve_odometry_node.cpp)
 ament_target_dependencies(reserve_odometry_node
   rclcpp sensor_msgs nav_msgs message_filters geometry_msgs tram_vehicle_msgs 
 )
+target_link_libraries(reserve_odometry_node Eigen3::Eigen ${Boost_LIBRARIES})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -40,5 +44,7 @@ install(TARGETS
   reserve_odometry_node
   DESTINATION lib/${PROJECT_NAME}
 )
+
+include_directories(include)
 
 ament_package()

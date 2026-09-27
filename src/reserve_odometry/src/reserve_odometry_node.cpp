@@ -19,8 +19,10 @@
 #include <limits>
 #include <stdexcept>
 
+#include "speed_object_type.hpp"
 #include <nlohmann/json.hpp>
 #include <GeographicLib/UTMUPS.hpp>
+
 
 struct TrackPoint {
     double x;

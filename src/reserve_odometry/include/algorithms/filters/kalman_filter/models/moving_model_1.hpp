@@ -3,7 +3,6 @@
 
 #include "../model_concept.hpp"
 
-namespace sys {
 namespace filter {
 namespace kalman {
 namespace model {
@@ -70,6 +69,5 @@ void moving_model_1<T_object>::matricies_init(const object_t& obj_) {
 }               /// <---model
 }           /// <--- kalman
 }       /// <--- filter
-}   /// <--- sys
 
 #endif

@@ -3,7 +3,6 @@
 
 #include "algorithms/filters/kalman_filter/model_concept.hpp"
 
-namespace sys {
 namespace filter {
 namespace kalman {
 namespace model {
@@ -85,7 +84,9 @@ Eigen::MatrixXd velocity_model<T_object>::make_R() {}
 
 
 template <class T_object>
-void velocity_model<T_object>::update(object_t* object_) { }
+void velocity_model<T_object>::update(object_t* object_) { 
+    // object_->speed_ = X(IDX::X);     Пример обновления вектора состояния значениями
+}
 
 //-----------------------------------------------------------------------------------
 
@@ -96,7 +97,6 @@ bool velocity_model<T_object>::equal(m_concept::model_concept<T_object> *concept
 }               /// <---model
 }           /// <--- kalman
 }       /// <--- filter
-}   /// <--- sys
 
 #endif
 

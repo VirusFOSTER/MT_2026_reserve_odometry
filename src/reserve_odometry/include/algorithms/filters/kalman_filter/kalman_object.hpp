@@ -4,7 +4,6 @@
 #include <boost/shared_ptr.hpp>
 #include "model_concept.hpp"
 
-namespace sys {
 namespace filter {
 namespace kalman {
 /**--------------------------------------------------------------------------------------------------------------------------
@@ -160,6 +159,5 @@ bool kalman_object<T_object>::update(const T_object& stage_) {
 }
 }           /// <--- kalman
 }       /// <--- filter
-}   /// <--- sys
 
 #endif
