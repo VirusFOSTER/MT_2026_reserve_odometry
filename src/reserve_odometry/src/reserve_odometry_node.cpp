@@ -22,6 +22,7 @@
 #include <nlohmann/json.hpp>
 #include <GeographicLib/UTMUPS.hpp>
 #include <Eigen/Dense>
+#include "tram_speed_ekf.hpp"
 
 struct TrackPoint {
     double x;
@@ -202,7 +203,7 @@ TrackPoint InterpolateTrack(
 }   
 
 
-class TramSpeedEKF
+/*class TramSpeedEKF
 {
 public:
 
@@ -801,7 +802,7 @@ private:
 
         return result;
     }
-};
+}; */
 
 using GnssSyncPolicy = 
             message_filters::sync_policies::ApproximateTime<

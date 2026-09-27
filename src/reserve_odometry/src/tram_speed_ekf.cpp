@@ -27,106 +27,6 @@ TramSpeedEKF::TramSpeedEKF()
 
 
 TramSpeedEKF::Result TramSpeedEKF::Update(
-    double front_velocity_kmh,
-    double rear_velocity_kmh,
-    int8_t driver_position,
-    double dt)
-{
-
-    // -----------------------------------------------------
-    // km/h -> m/s
-    // -----------------------------------------------------
-
-    const double z_front = front_velocity_kmh / 3.6;
-
-    const double z_rear = rear_velocity_kmh / 3.6;
-
-
-    // -----------------------------------------------------
-    // Первая инициализация
-    // -----------------------------------------------------
-
-    if (!initialized_) {
-        x_(V) =
-            0.5 * (z_front + z_rear);
-
-        x_(A) = 0.0;
-
-        x_(BF) = 0.0;
-        x_(BR) = 0.0;
-
-        initialized_ = true;
-
-        return GetResult();
-    }
-
-    // Защита от плохого dt.
-    if (dt <= 0.0 || dt > 0.5) {
-        return GetResult();
-    }
-
-    // -----------------------------------------------------
-    // Управление
-    // -----------------------------------------------------
-
-    const int command =
-        std::clamp(
-            static_cast<int>(driver_position),
-            -15,
-            15
-        );
-
-    const double u_traction =
-        static_cast<double>(
-            std::max(command, 0)
-        ) / 15.0;
-
-    const double u_brake =
-        static_cast<double>(
-            std::max(-command, 0)
-        ) / 15.0;
-
-
-    // -----------------------------------------------------
-    // Predict
-    // -----------------------------------------------------
-
-    Predict(
-        u_traction,
-        u_brake,
-        z_front,
-        z_rear,
-        dt
-    );
-
-
-    // -----------------------------------------------------
-    // Correct
-    // -----------------------------------------------------
-
-    CorrectWheel(
-        z_front,
-        BF
-    );
-
-    CorrectWheel(
-        z_rear,
-        BR
-    );
-
-
-    // -----------------------------------------------------
-    // Физические ограничения
-    // -----------------------------------------------------
-
-    ApplyConstraints();
-
-
-    return GetResult();
-}
-
-
-TramSpeedEKF::Result TramSpeedEKF::Update(
         double front_velocity_kmh,
         double rear_velocity_kmh,
         int8_t driver_position,
@@ -442,4 +342,150 @@ void TramSpeedEKF::Predict(
     P_ =
         F * P_ * F.transpose()
         + Q;
+}
+
+void TramSpeedEKF::CorrectWheel(
+        double measurement,
+        int slip_index)
+{
+    // -----------------------------------------------------
+    // h(x) = v + slip
+    // -----------------------------------------------------
+
+    Eigen::Matrix<double, 1, N> H;
+
+    H.setZero();
+
+    H(0, V) = 1.0;
+    H(0, slip_index) = 1.0;
+
+
+    const double predicted_measurement =
+        x_(V) +
+        x_(slip_index);
+
+
+    const double innovation =
+        measurement -
+        predicted_measurement;
+
+
+    // -----------------------------------------------------
+    // Measurement covariance
+    // -----------------------------------------------------
+
+    double R =
+        wheel_sigma_ *
+        wheel_sigma_;
+
+
+    // -----------------------------------------------------
+    // Innovation covariance
+    // -----------------------------------------------------
+
+    double S =
+        (H * P_ * H.transpose())(0, 0)
+        + R;
+
+
+    // -----------------------------------------------------
+    // Robustification
+    //
+    // Очень большой innovation может означать резкое
+    // буксование/юз или выброс датчика.
+    // -----------------------------------------------------
+
+    const double normalized_innovation =
+        innovation * innovation /
+        std::max(S, 1e-9);
+
+
+    constexpr double NIS_LIMIT = 16.0;
+
+
+    if (normalized_innovation > NIS_LIMIT) {
+        const double scale =
+            normalized_innovation /
+            NIS_LIMIT;
+
+        R *= scale;
+
+        S = (H * P_ * H.transpose())(0, 0) + R;
+    }
+
+
+    // -----------------------------------------------------
+    // Kalman gain
+    // -----------------------------------------------------
+
+    const Eigen::Matrix<double, N, 1> K =
+        P_ * H.transpose() / S;
+
+
+    // -----------------------------------------------------
+    // State correction
+    // -----------------------------------------------------
+
+    x_ += K * innovation;
+
+
+    // -----------------------------------------------------
+    // Joseph covariance update
+    // -----------------------------------------------------
+
+    const StateMatrix I = StateMatrix::Identity();
+
+    const StateMatrix KH = K * H;
+
+
+    P_ = (I - KH) * P_ * (I - KH).transpose() + K * R * K.transpose();
+}
+
+void TramSpeedEKF::ApplyConstraints()
+{
+    // Мы оцениваем модуль продольной скорости.
+    if (x_(V) < 0.0) {
+        x_(V) = 0.0;
+    }
+
+
+    // Физически коэффициенты тяги и торможения
+    // отрицательными быть не могут.
+    x_(KT) =
+        std::clamp(
+            x_(KT),
+            0.05,
+            4.0
+        );
+
+    x_(KB) =
+        std::clamp(
+            x_(KB),
+            0.05,
+            6.0
+        );
+
+
+    x_(DRAG) =
+        std::clamp(
+            x_(DRAG),
+            0.0,
+            0.1
+        );
+
+
+    // Ограничиваем совсем патологические оценки slip.
+    x_(BF) =
+        std::clamp(
+            x_(BF),
+            -20.0,
+            20.0
+        );
+
+    x_(BR) =
+        std::clamp(
+            x_(BR),
+            -20.0,
+            20.0
+        );
 }
