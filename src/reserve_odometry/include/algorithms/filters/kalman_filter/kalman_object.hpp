@@ -47,7 +47,7 @@ public:
      * @param dt_ - интервал времени для прогнозирования
      * @return результат прогнозирования
      */
-    bool predict(double dt_, float ref_v_ = 0.0);
+    bool predict(double dt_);
 
     /**
      * @brief update - обновление вектора состояния

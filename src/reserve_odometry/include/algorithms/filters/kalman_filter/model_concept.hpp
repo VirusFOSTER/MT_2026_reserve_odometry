@@ -27,7 +27,7 @@ struct model_concept {
      * @brief make_X - формирование вектора состояния через интервал времени dt_
      * @param dt_ - интервал времени для прогнозирования
      */
-    virtual void make_X(double dt_, float ref_v_ = 0.0) = 0;
+    virtual void make_X(double dt_) = 0;
 
     /**
      * @brief make_A - формирование матрицы перехода состояния
