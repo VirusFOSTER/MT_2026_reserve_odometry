@@ -11,6 +11,8 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+add_definitions(-DPROJECT_PATH="${PROJECT_SOURCE_DIR}")
+
 
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)

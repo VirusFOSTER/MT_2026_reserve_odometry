@@ -233,10 +233,8 @@ class ReserveOdometry : public rclcpp::Node {
             "Запуск ноды резервной одометрии!");
 
         // Объявление параметров
-        declare_parameter<std::string>("forward_track_path", 
-                                       "/ros2_ws/src/reserve_odometry/resource/таллинская-щукинская.json");
-        declare_parameter<std::string>("backward_track_path",
-                                       "/ros2_ws/src/reserve_odometry/resource/щукинская-таллинская.json");
+        declare_parameter<std::string>("forward_track_path", (std::string)PROJECT_PATH + "/resource/таллинская-щукинская.json");
+        declare_parameter<std::string>("backward_track_path", (std::string)PROJECT_PATH +"/resource/щукинская-таллинская.json");
 
                                        
 
