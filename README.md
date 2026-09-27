@@ -1,6 +1,10 @@
 # MT_2026_reserve_odometry
 ## 1. Описание модуля
 
+Описание модуля представлено по ссылке:
+
+https://github.com/VirusFOSTER/MT_2026_reserve_odometry/tree/main/docs
+
 ## 2. Интерфейсы
 
 **Входные топики**
@@ -70,5 +74,18 @@ source install/setup.bash
 ### Запуск проекта
 
 ```bash
+# Запуск модуля резервной одометрии
 ros2 run reserve_odometry reserve_odometry_node
 ```
+
+Для прослушивания выходных топиков необходимо в отдельном терминале выполнить следующее:
+
+```bash
+docker exec -ti ros2_dev bash
+
+source install/setup.bash
+
+ros2 bag play <наименование bag-файла>
+```
+
+После начала проигрывания bag-файла запущенная нода reserve_odometry будет публиковать сообщения в выходные топики
