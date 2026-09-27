@@ -76,6 +76,6 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-include_directories(include)
+include_directories(include resource)
 
 ament_package()
