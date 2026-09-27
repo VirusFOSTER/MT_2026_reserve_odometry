@@ -53,7 +53,7 @@ bash ./docker_build.sh
 Выполнить скрипт:
 
 ```bash
-docker compose exec ros2 bash
+bash ./docker_run.sh
 ```
 
 В результате будет запущен контейнер с поддержкой графики (можно использовать RVIZ)
