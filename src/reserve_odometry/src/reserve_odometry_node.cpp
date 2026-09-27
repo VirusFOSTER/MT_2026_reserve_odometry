@@ -20,6 +20,7 @@
 #include <stdexcept>
 
 #include <nlohmann/json.hpp>
+#include <GeographicLib/UTMUPS.hpp>
 
 struct TrackPoint {
     double x;
@@ -69,7 +70,7 @@ Track LoadTrack(const std::string& path) {
 
             accumulated_s += std::sqrt(
                 dx * dx + dy * dy + dz * dz
-            );
+                );
 
             point.s = accumulated_s;
         }
@@ -87,24 +88,53 @@ struct MapPoint {
 };
 
 MapPoint GnssToMap(
-    double latitude, 
+    double latitude,
     double longitude,
     double altitude
-) {
-    return {0.0,0.0,0.0};
+    ) {
+    int zone;
+    bool northp;
+
+    double easting;
+    double northing;
+
+    GeographicLib::UTMUPS::Forward(
+        latitude,
+        longitude,
+        zone,
+        northp,
+        easting,
+        northing
+        );
+
+    if (zone != 37 || !northp) {
+        throw std::runtime_error(
+            "GNSS point is outside expected UTM zone 37N"
+            );
+    }
+
+    const double MGRS_ORIGIN_EASTING = 300000.0;
+    const double MGRS_ORIGIN_NORTHING = 6100000.0;
+
+    MapPoint result;
+    result.x = easting - MGRS_ORIGIN_EASTING;
+    result.y = northing - MGRS_ORIGIN_NORTHING;
+    result.z = altitude;
+
+    return result;
 }
 
 size_t FindNearestPoint(
     const std::vector<TrackPoint>& track,
-    double x, 
+    double x,
     double y
-) {
+    ) {
     size_t best_index = 0;
     double best_distance = std::numeric_limits<double>::max();
 
     for (size_t i = 0; i < track.size(); ++i) {
         const double dx = track[i].x - x;
-        const double dy = track[i].y - y;
+        const double dy = track[i ].y - y;
         const double distance = dx*dx + dy*dy;
 
         if (distance < best_distance) {
@@ -128,13 +158,54 @@ double NormalizeAngle(double angle) {
     return angle;
 }
 
-using GnssSyncPolicy = 
-            message_filters::sync_policies::ApproximateTime<
-                sensor_msgs::msg::NavSatFix,
-                sensor_msgs::msg::NavSatFix>;
+TrackPoint InterpolateTrack(
+    const std::vector<TrackPoint>& track,
+    double s
+    ) {
+    TrackPoint result;
+
+    if (track.front().s >= s) {
+        return track.front();
+    }
+
+    if (track.back().s <= s) {
+        return track.back();
+    }
+
+    auto it = std::lower_bound(
+        track.begin(),
+        track.end(),
+        s,
+        [](const TrackPoint& p, double value) {
+            return p.s < value;
+        }
+        );
+
+    int i1 = std::distance(track.begin(), it);
+    int i0 = i1 - 1;
+
+    const TrackPoint& p1 = track[i1];
+    const TrackPoint& p0 = track[i0];
+
+    const double segment = p1.s - p0.s;
+    const double alpha = (segment > 0 ? (s - p0.s)/segment : 0.0);
+
+    result.x = p0.x + alpha * (p1.x - p0.x);
+    result.y = p0.y + alpha * (p1.y - p0.y);
+    result.z = p0.z + alpha * (p1.z - p0.z);
+    result.curv = p0.curv + alpha * (p1.curv - p0.curv);
+    result.tang = p0.tang + alpha * NormalizeAngle(p1.tang - p0.tang);
+
+    return result;
+}
+
+using GnssSyncPolicy =
+    message_filters::sync_policies::ApproximateTime<
+        sensor_msgs::msg::NavSatFix,
+        sensor_msgs::msg::NavSatFix>;
 
 class ReserveOdometry : public rclcpp::Node {
-    public:
+public:
     ReserveOdometry(): Node("reserve_odometry") {
         /*
             Подписывается  на топики:
@@ -147,19 +218,21 @@ class ReserveOdometry : public rclcpp::Node {
             /sensing/gnss/master/vel -> geometry_msgs/msg/TwistStamped
             /sensing/gnss/rover/fix -> sensor_msgs/msg/NavSatFix
             /sensing/gnss/rover/vel -> geometry_msgs/msg/TwistStamped
-        
+
             Публикует в топики:
             /result/velocity -> tram_vehicle_msgs/msg/VelocitySensor
             /result/position -> nav_msgs/msg/Odometry
-        
+
         */
 
         RCLCPP_INFO(get_logger(),
-            "Запуск ноды резервной одометрии!");
+                    "Запуск ноды резервной одометрии!");
 
         // Объявление параметров
-        declare_parameter<std::string>("forward_track_path", "");
-        declare_parameter<std::string>("backward_track_path", "");
+        declare_parameter<std::string>("forward_track_path",
+                                       "/home/epyur/mt_hackathon_ws/src/reserve_odometry/resource/таллинская - щукинская.json");
+        declare_parameter<std::string>("backward_track_path",
+                                       "/home/epyur/mt_hackathon_ws/src/reserve_odometry/resource/щукинская - таллинская.json");
 
         // Получение параметров
         std::string forward_track_path = get_parameter("forward_track_path").as_string();
@@ -168,28 +241,34 @@ class ReserveOdometry : public rclcpp::Node {
         // Выгрузка треков
         forward_track_ = LoadTrack(forward_track_path);
         backward_track_ = LoadTrack(backward_track_path);
+        RCLCPP_INFO(
+            get_logger(),
+            "Загружены карты: 1: %zu точек; 2: %zu точек.",
+            forward_track_.size(),
+            backward_track_.size()
+            );
 
         master_fix_filter_ =
             std::make_shared<
                 message_filters::Subscriber<
                     sensor_msgs::msg::NavSatFix>>(
-                        this,
-                        "/sensing/gnss/master/fix");
+                this,
+                "/sensing/gnss/master/fix");
 
         rover_fix_filter_ =
             std::make_shared<
                 message_filters::Subscriber<
                     sensor_msgs::msg::NavSatFix>>(
-                        this,
-                        "/sensing/gnss/rover/fix");
+                this,
+                "/sensing/gnss/rover/fix");
 
         gnss_sync_ =
             std::make_shared<
                 message_filters::Synchronizer<
                     GnssSyncPolicy>>(
-                            GnssSyncPolicy(20),
-                            *master_fix_filter_,
-                            *rover_fix_filter_);
+                GnssSyncPolicy(20),
+                *master_fix_filter_,
+                *rover_fix_filter_);
 
         gnss_sync_->setMaxIntervalDuration(
             rclcpp::Duration::from_seconds(0.1));
@@ -202,14 +281,14 @@ class ReserveOdometry : public rclcpp::Node {
                 std::placeholders::_2));
 
 
-        //Синхронное получение входных данных    
+        //Синхронное получение входных данных
         front_bogie_sub_ = std::make_shared<message_filters::Subscriber<tram_vehicle_msgs::msg::VelocitySensor>>(
-           this, "/vehicle/front_bogie_velocity");
+            this, "/vehicle/front_bogie_velocity");
         rear_bogie_sub_ = std::make_shared<message_filters::Subscriber<tram_vehicle_msgs::msg::VelocitySensor>>(
             this, "/vehicle/rear_bogie_velocity");
         cmd_sub_  = std::make_shared<message_filters::Subscriber<tram_vehicle_msgs::msg::DriverControllerCommand>>(
             this, "/vehicle/driver_position_cmd");
-        
+
         using SyncPolicy = message_filters::sync_policies::ApproximateTime<
             tram_vehicle_msgs::msg::VelocitySensor, tram_vehicle_msgs::msg::VelocitySensor,
             tram_vehicle_msgs::msg::DriverControllerCommand>;
@@ -218,30 +297,11 @@ class ReserveOdometry : public rclcpp::Node {
             *front_bogie_sub_, *rear_bogie_sub_, *cmd_sub_);
         sync_->setMaxIntervalDuration(rclcpp::Duration::from_seconds(sync_slop_sec_));
         sync_->registerCallback(std::bind(&ReserveOdometry::SyncCallback, this,
-            std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-        
-        
+                                          std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-        //Подписка на топики GNSS для начальной коррекции    
-        // master_fix_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(
-        //         "/sensing/gnss/master/fix", 10,
-        //         std::bind(&ReserveOdometry::MasterFixCallback, this, std::placeholders::_1));
-
-        master_vel_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
-                "/sensing/gnss/master/vel", 10,
-                std::bind(&ReserveOdometry::MasterVelCallback, this, std::placeholders::_1));
-        
-        // rover_fix_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(
-        //         "/sensing/gnss/rover/fix", 10,
-        //         std::bind(&ReserveOdometry::RoverFixCallback, this, std::placeholders::_1));
-
-        rover_vel_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
-                "/sensing/gnss/rover/vel", 10,
-                std::bind(&ReserveOdometry::RoverVelCallback, this, std::placeholders::_1));
-           
-        //Паблишеры для отправки одометрии        
-        vel_pub_ = create_publisher<tram_vehicle_msgs::msg::VelocitySensor>("/result/velocity", 10);        
-        pos_pub_ = create_publisher<nav_msgs::msg::Odometry>("/result/position", 10);   
+        //Паблишеры для отправки одометрии
+        vel_pub_ = create_publisher<tram_vehicle_msgs::msg::VelocitySensor>("/result/velocity", 10);
+        pos_pub_ = create_publisher<nav_msgs::msg::Odometry>("/result/position", 10);
     }
 
 private:
@@ -249,7 +309,7 @@ private:
     void GnssInitCallback(
         const sensor_msgs::msg::NavSatFix::ConstSharedPtr& master_msg,
         const sensor_msgs::msg::NavSatFix::ConstSharedPtr& rover_msg
-    ) {
+        ) {
         if (pose_initialized_) {
             return;
         }
@@ -257,20 +317,20 @@ private:
         RCLCPP_INFO(
             get_logger(),
             "Получены GNSS для инициализации"
-        );
+            );
 
         // Переподим коордианты атенн в метричеую плоскую с.к.
         const MapPoint master = GnssToMap(
             master_msg->latitude,
             master_msg->longitude,
             master_msg->altitude
-        );
+            );
 
         const MapPoint rover = GnssToMap(
             rover_msg->latitude,
             rover_msg->longitude,
             rover_msg->altitude
-        );
+            );
 
         // Определяем направление трамвая
         const double dx = rover.x - master.x;
@@ -279,54 +339,56 @@ private:
 
         // Вычисляем положение base_link
         const double ROVER_X = 2.563; //Координата rover относительно base_link
-        const double base_x = rover.x - ROVER_X * std::cos(yaw);
-        const double base_y = rover.y - ROVER_X * std::sin(yaw);
-        const double base_z = rover.z - 3.0; //Антенна Rover находится выше base_link на 3 м.
+        init_base_x_ = rover.x - ROVER_X * std::cos(yaw);
+        init_base_y_ = rover.y - ROVER_X * std::sin(yaw);
+        init_base_z_ = rover.z - 3.0; //Антенна Rover находится выше base_link на 3 м.
 
         // Находим ближайшие точки в двух направлениях
         const size_t forward_index = FindNearestPoint(
-            forward_track_, base_x, base_y
-        );
+            forward_track_, init_base_x_, init_base_y_
+            );
 
         const size_t backward_index = FindNearestPoint(
-            backward_track_, base_x, base_y
-        );
-        
+            backward_track_, init_base_x_, init_base_y_
+            );
+
         // Вычисляем ощибки по углам
         const double forward_error = std::abs(
             NormalizeAngle(yaw - forward_track_[forward_index].tang)
-        );
+            );
 
         const double backward_error = std::abs(
             NormalizeAngle(yaw - backward_track_[backward_index].tang)
-        );
+            );
 
         // Определяем направление маршрута
         if (forward_error < backward_error) {
             active_track_ = &forward_track_;
             track_s_ = forward_track_[forward_index].s;
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Node inited. Forward s=%.3f", track_s_
+                );
         } else {
             active_track_ = &backward_track_;
             track_s_ = backward_track_[backward_index].s;
+
+            RCLCPP_INFO(
+                get_logger(),
+                "Node inited. Forward s=%.3f", track_s_
+                );
         }
 
         // Инициализация ноды закончилась
         pose_initialized_ = true;
-    }   
-
-    void MasterVelCallback(geometry_msgs::msg::TwistStamped::ConstSharedPtr msg) {
-        return;
-    }
-
-    void RoverVelCallback(geometry_msgs::msg::TwistStamped::ConstSharedPtr msg) {
-        return;
     }
 
     void SyncCallback(
         const tram_vehicle_msgs::msg::VelocitySensor::ConstSharedPtr& front_bogie_vel,
         const tram_vehicle_msgs::msg::VelocitySensor::ConstSharedPtr& rear_bogie_vel,
         const tram_vehicle_msgs::msg::DriverControllerCommand::ConstSharedPtr& cmd
-    ) {
+        ) {
         if (!pose_initialized_ || active_track_ == nullptr) {
             return;
         }
@@ -334,31 +396,32 @@ private:
         RCLCPP_INFO(
             get_logger(),
             "Входные данные получены!"
-        );
+            );
 
         const rclcpp::Time stamp(front_bogie_vel->header.stamp);
 
         const double front_velocity =
-            front_bogie_vel->velocity / 3.6;
+            front_bogie_vel->velocity;
 
         const double rear_velocity =
-            rear_bogie_vel->velocity / 3.6;
+            rear_bogie_vel->velocity;
 
-        const double velocity = 
+        const double velocity =
             0.5 * (
                 front_velocity + rear_velocity
-            );
-        
+                );
+
         if (!time_initialized_) {
             last_stamp_ = stamp;
             last_velocity_ = velocity;
             time_initialized_ = true;
 
-            PublishVelocity(velocity, 
-                        "base_link",
-                        stamp);
-        
-            PublishPosition(velocity,
+            PublishVelocity(velocity,
+                            "base_link",
+                            stamp);
+
+            PublishPosition({init_base_x_, init_base_y_, init_base_z_},
+                            velocity,
                             "odom",
                             "base_link",
                             stamp);
@@ -368,32 +431,37 @@ private:
 
         const double dt = (stamp - last_stamp_).seconds();
 
-        // не рабочее
-        // if (dt > 0.0 && dt < 1.0) {
-        //     const double distance = 0.5 * (last_velocity_ + velocity) * dt; 
-        //     x_ += distance;
-        // }
+        if (dt > 0.0 && dt < 1.0) {
+            const double ds = 0.5 * (last_velocity_ + velocity) * dt;
+            track_s_ += ds;
+        }
+
+        const TrackPoint pose = InterpolateTrack(*active_track_, track_s_);
 
         last_stamp_ = stamp;
         last_velocity_ = velocity;
 
-        PublishVelocity(velocity, 
+        PublishVelocity(velocity,
                         "base_link",
                         stamp);
-        
-        PublishPosition(velocity,
+
+        PublishPosition({pose.x, pose.y, pose.z},
+                        velocity,
                         "odom",
                         "base_link",
                         stamp);
-        
+
         RCLCPP_INFO(
             get_logger(),
-            "v=%.3f m/s, x=%.3f m, dt=%.4f, cmd=%d",
+            "v=%.3f m/s, x=%.3f, y=%.3f, z=%.3f, s=%.3f m, dt=%.4f, cmd=%d",
             velocity,
-            x_,
+            pose.x,
+            pose.y,
+            pose.z,
+            track_s_,
             dt,
             static_cast<int>(cmd->position)
-        );
+            );
     }
 
     void PublishVelocity(const double velocity,
@@ -404,43 +472,47 @@ private:
         velocity_msg.header.stamp = stamp;
         velocity_msg.header.frame_id = frame_id;
         velocity_msg.velocity = velocity;
-        
+
         vel_pub_->publish(velocity_msg);
     }
 
-    void PublishPosition(const double velocity,
+    void PublishPosition(const MapPoint& pose,
+                         const double velocity,
                          const std::string& frame_id,
                          const std::string& child_frame_id,
                          const rclcpp::Time& stamp
-    ) {
+                         ) {
         nav_msgs::msg::Odometry odom_msg;
 
         odom_msg.header.stamp = stamp;
         odom_msg.header.frame_id = frame_id;
         odom_msg.child_frame_id = child_frame_id;
-        
-        odom_msg.pose.pose.position.x = x_;
-        odom_msg.pose.pose.position.y = y_;
-        odom_msg.pose.pose.position.z = z_;
+
+        odom_msg.pose.pose.position.x = pose.x;
+        odom_msg.pose.pose.position.y = pose.y;
+        odom_msg.pose.pose.position.z = pose.z;
+
+        //       const double half_yaw = pose.tang / 2;
 
         odom_msg.pose.pose.orientation.x = 0.0;
         odom_msg.pose.pose.orientation.y = 0.0;
-        odom_msg.pose.pose.orientation.z = 0.0;
-        odom_msg.pose.pose.orientation.w = 1.0;
+        odom_msg.pose.pose.orientation.z = 0.0; //std::sin(half_yaw);
+        odom_msg.pose.pose.orientation.w = 1.0; //std::cos(half_yaw);
 
         odom_msg.twist.twist.linear.x = velocity;
-        
+        //        odom_msg.twist.twist.angular.z = velocity * pose.curv;
+
         pos_pub_->publish(odom_msg);
     }
 
     std::shared_ptr<
         message_filters::Subscriber<
-        sensor_msgs::msg::NavSatFix>>
+            sensor_msgs::msg::NavSatFix>>
         master_fix_filter_;
 
     std::shared_ptr<
         message_filters::Subscriber<
-        sensor_msgs::msg::NavSatFix>>
+            sensor_msgs::msg::NavSatFix>>
         rover_fix_filter_;
 
     std::shared_ptr<
@@ -461,9 +533,9 @@ private:
     int sync_queue_size_ = 30;
     double sync_slop_sec_ = 0.2;
 
-    double x_ = 0.0;
-    double y_ = 0.0;
-    double z_ = 0.0;
+    double init_base_x_ = 0.0;
+    double init_base_y_ = 0.0;
+    double init_base_z_ = 0.0;
     double track_s_ = 0.0;
 
     double last_velocity_ = 0.0;
