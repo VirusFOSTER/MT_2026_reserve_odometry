@@ -15,7 +15,7 @@
   <depend>geometry_msgs</depend>
   <depend>message_filters</depend>
   <depend>tram_vehicle_msgs</depend>
-  <depend>eigen</depend>
+  <depend>nlohmann</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
