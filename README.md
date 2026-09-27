@@ -76,6 +76,8 @@ source install/setup.bash
 ```bash
 # Запуск модуля резервной одометрии
 ros2 run reserve_odometry reserve_odometry_node
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ```
 
 Для прослушивания выходных топиков необходимо в отдельном терминале выполнить следующее:
@@ -84,6 +86,8 @@ ros2 run reserve_odometry reserve_odometry_node
 docker exec -ti ros2_dev bash
 
 source install/setup.bash
+
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
 ros2 bag play <наименование bag-файла>
 ```

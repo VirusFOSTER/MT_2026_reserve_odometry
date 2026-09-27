@@ -24,6 +24,7 @@ USER $USERNAME
 WORKDIR /ros2_ws
 
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc \
-    && echo "source /ros2_ws/install/setup.bash 2>/dev/null || true" >> ~/.bashrc
+    && echo "source /ros2_ws/install/setup.bash 2>/dev/null || true" >> ~/.bashrc \
+    echo "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp" >> ~/.bashrc
 
 CMD ["bash"]
